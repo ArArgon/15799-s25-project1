@@ -20,8 +20,7 @@ public class ExtendedJdbcSchema implements Schema {
     public ExtendedJdbcSchema(JdbcSchema jdbcSchema) {
         this.jdbcSchema = jdbcSchema;
     }
-
-
+    
     @Override
     public @Nullable Table getTable(String name) {
         if (tableMap.containsKey(name)) {
@@ -95,6 +94,4 @@ public class ExtendedJdbcSchema implements Schema {
 
         return new ExtendedJdbcSchema((JdbcSchema) snapshot);
     }
-
-
 }

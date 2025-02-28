@@ -1,6 +1,7 @@
 package edu.cmu.cs.db.calcite_app.app;
 
 import edu.cmu.cs.db.calcite_app.app.adapter.ExtendedJdbcSchema;
+import edu.cmu.cs.db.calcite_app.app.utils.Utils;
 import org.apache.calcite.adapter.enumerable.EnumerableConvention;
 import org.apache.calcite.adapter.enumerable.EnumerableRules;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
@@ -108,7 +109,8 @@ public class App {
     private static SqlNode convertBackToSql(RelNode relNode) {
         RelToSqlConverter converter =
                 new RelToSqlConverter(PostgresqlSqlDialect.DEFAULT);
-        var result = converter.visitInput(relNode, 0);
+
+        var result = converter.visitRoot(relNode);
         return result.asQueryOrValues();
     }
 
@@ -266,18 +268,42 @@ public class App {
         calciteConnection.setSchema("duckdb");
 
         var sql = """
-                    SELECT c.c_custkey, c.c_name
-                    FROM customer c
-                    JOIN orders o1 ON c.c_custkey = o1.o_custkey
-                    JOIN orders o2 ON c.c_custkey = o2.o_custkey
-                    WHERE o1.o_orderstatus = 'F'
-                      AND o2.o_orderpriority = '1-URGENT'
-                      AND EXISTS (
-                        SELECT 1
-                        FROM lineitem l
-                        WHERE l.l_orderkey = o1.o_orderkey
-                        AND l.l_quantity > 30
-                      )
+                select
+                	sum(l_extendedprice* (1 - l_discount)) as revenue
+                from
+                	lineitem,
+                	part
+                where
+                	(
+                		p_partkey = l_partkey
+                		and p_brand = 'Brand#52'
+                		and p_container in ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+                		and l_quantity >= 9 and l_quantity <= 9 + 10
+                		and p_size between 1 and 5
+                		and l_shipmode in ('AIR', 'AIR REG')
+                		and l_shipinstruct = 'DELIVER IN PERSON'
+                	)
+                	or
+                	(
+                		p_partkey = l_partkey
+                		and p_brand = 'Brand#42'
+                		and p_container in ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK')
+                		and l_quantity >= 18 and l_quantity <= 18 + 10
+                		and p_size between 1 and 10
+                		and l_shipmode in ('AIR', 'AIR REG')
+                		and l_shipinstruct = 'DELIVER IN PERSON'
+                	)
+                	or
+                	(
+                		p_partkey = l_partkey
+                		and p_brand = 'Brand#23'
+                		and p_container in ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')
+                		and l_quantity >= 22 and l_quantity <= 22 + 10
+                		and p_size between 1 and 15
+                		and l_shipmode in ('AIR', 'AIR REG')
+                		and l_shipinstruct = 'DELIVER IN PERSON'
+                	)
+                
                 """;
 
 
@@ -285,7 +311,7 @@ public class App {
                 .newConfigBuilder()
                 .defaultSchema(rootSchema.getSubSchema("duckdb"))
                 .parserConfig(SqlParser.config().withCaseSensitive(false))
-                .ruleSets(RuleSets.ofList(EnumerableRules.rules()))
+                .sqlToRelConverterConfig(SqlToRelConverter.config().withExpand(true))
                 .build();
 
         Planner planner = Frameworks.getPlanner(frameworkConfig);
@@ -297,27 +323,73 @@ public class App {
         // Convert the rule to be `Enumerable`.
         var cluster = relNode.getCluster();
         var optPlanner = cluster.getPlanner();
-        var convention = findJdbcConvention(relNode);
-        assert convention != null;
 
-        var rules = new ArrayList();
+
+        var rules = new ArrayList(List.of(
+                CoreRules.AGGREGATE_PROJECT_MERGE,
+                CoreRules.AGGREGATE_REDUCE_FUNCTIONS,
+                CoreRules.SORT_REMOVE,
+                CoreRules.LIMIT_MERGE,
+                CoreRules.AGGREGATE_EXPAND_DISTINCT_AGGREGATES,
+                CoreRules.CALC_REMOVE,
+                CoreRules.MULTI_JOIN_OPTIMIZE,
+
+
+                CoreRules.AGGREGATE_JOIN_TRANSPOSE_EXTENDED,
+                CoreRules.AGGREGATE_VALUES,
+                CoreRules.AGGREGATE_JOIN_REMOVE,
+//                CoreRules.PROJECT_CALC_MERGE,
+                CoreRules.PROJECT_FILTER_TRANSPOSE,
+//                CoreRules.PROJECT_TO_CALC,
+//                CoreRules.CALC_MERGE,
+
+                CoreRules.FILTER_CORRELATE,
+                CoreRules.FILTER_MERGE,
+                CoreRules.FILTER_AGGREGATE_TRANSPOSE,
+                CoreRules.FILTER_REDUCE_EXPRESSIONS,
+                CoreRules.FILTER_CORRELATE,
+                CoreRules.FILTER_SCAN,
+                CoreRules.FILTER_MULTI_JOIN_MERGE,
+                CoreRules.FILTER_INTO_JOIN,
+                CoreRules.FILTER_SUB_QUERY_TO_CORRELATE,
+                CoreRules.JOIN_SUB_QUERY_TO_CORRELATE,
+                CoreRules.PROJECT_SUB_QUERY_TO_CORRELATE,
+                CoreRules.AGGREGATE_FILTER_TRANSPOSE,
+                CoreRules.SEMI_JOIN_FILTER_TRANSPOSE,
+
+                CoreRules.FILTER_PROJECT_TRANSPOSE,
+                CoreRules.PROJECT_AGGREGATE_MERGE,
+                CoreRules.PROJECT_JOIN_TRANSPOSE,
+                CoreRules.PROJECT_SET_OP_TRANSPOSE
+
+
+                // Stuck:
+//                CoreRules.JOIN_PROJECT_BOTH_TRANSPOSE
+//                CoreRules.JOIN_PROJECT_LEFT_TRANSPOSE,
+//                CoreRules.JOIN_PROJECT_RIGHT_TRANSPOSE
+        ));
+
+        // FIXME: q19, q21, q22
+
         rules.addAll(EnumerableRules.rules());
-        rules.add(CoreRules.PROJECT_TO_CALC);
 
         RelTraitSet traits = RelTraitSet.createEmpty();
-        traits.plus(ConventionTraitDef.INSTANCE.getDefault());
-        traits.plus(EnumerableConvention.INSTANCE);
+        for (var trait : relNode.getTraitSet()) {
+            traits = traits.plus(trait);
+        }
+        traits = traits.plus(ConventionTraitDef.INSTANCE.getDefault());
+        traits = traits.plus(EnumerableConvention.INSTANCE);
 
-        displayTraits(relNode);
+        relNode = optimize(optPlanner, relNode, traits,
+                RuleSets.ofList(rules));
 
-        relNode = optimize(optPlanner, relNode, traits, RuleSets.ofList
-                (rules));
+        relNode = Utils.EnumerableLimitReplacer(relNode);
 
         log.error(RelOptUtil.dumpPlan("",
                 relNode, SqlExplainFormat.TEXT,
                 SqlExplainLevel.ALL_ATTRIBUTES));
 
-        displayTraits(relNode);
+//        displayTraits(relNode);
 
         var runner = calciteConnection.unwrap(RelRunner.class);
         try (var stmt = runner.prepareStatement(relNode)) {
