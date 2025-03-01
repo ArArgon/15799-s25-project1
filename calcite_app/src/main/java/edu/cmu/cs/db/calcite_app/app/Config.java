@@ -33,7 +33,7 @@ public class Config {
         this.databaseFile = databaseFile;
     }
 
-    private DataSource getDataSource() {
+    public DataSource getDataSource() {
         var url = "jdbc:duckdb:" + getDatabaseFile();
         return JdbcSchema.dataSource(
                 url, "org.duckdb.DuckDBDriver", null, null
@@ -73,7 +73,7 @@ public class Config {
         var jdbcSchema = JdbcSchema.create(
                 rootSchema, DUCKDB_SCHEMA, getDataSource(), null, null
         );
-        log.info("connection schema: " + jdbcSchema.getTableNames());
+        log.info("connection schema: {}", jdbcSchema.getTableNames());
         return jdbcSchema;
     }
 }

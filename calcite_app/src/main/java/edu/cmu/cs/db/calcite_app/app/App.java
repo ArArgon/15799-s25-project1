@@ -1,5 +1,6 @@
 package edu.cmu.cs.db.calcite_app.app;
 
+import edu.cmu.cs.db.calcite_app.app.utils.Utils;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -8,8 +9,11 @@ import org.apache.calcite.tools.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 
 public class App {
     private static final Logger log = LoggerFactory.getLogger(App.class);
@@ -46,6 +50,7 @@ public class App {
             CoreRules.AGGREGATE_FILTER_TRANSPOSE,
             CoreRules.SEMI_JOIN_FILTER_TRANSPOSE,
 
+            CoreRules.PROJECT_CORRELATE_TRANSPOSE,
             CoreRules.FILTER_PROJECT_TRANSPOSE,
             CoreRules.PROJECT_AGGREGATE_MERGE,
             CoreRules.PROJECT_JOIN_TRANSPOSE,
@@ -61,28 +66,28 @@ public class App {
 //                CoreRules.JOIN_PROJECT_RIGHT_TRANSPOSE
     );
 
-    private static void processSql(String sql, Config config) throws SQLException,
-            ValidationException, SqlParseException, RelConversionException {
-        try (var context = new OptimizationContext(config)) {
+    private static void processSql(String sql, Config config, Map<String,
+            TableStatistics> statistics) throws SQLException,
+            ValidationException, SqlParseException, RelConversionException,
+            IOException {
+        try (var context = new OptimizationContext(config, statistics)) {
             var relNode = context.parse(sql);
 
-//                log.info(Utils.serializePlan(relNode));
             relNode = context.optimize(relNode);
 
-//                log.info(Utils.serializePlan(relNode));
-//            log.info("Converted back to Sql: " + context.convertBackToSql
-//            (relNode));
+            log.info(Utils.serializePlan(relNode));
+            log.info("Converted back to Sql: {}",
+                    context.convertBackToSql(relNode));
 
-//                StringWriter writer = new StringWriter();
-//                context.executeAndSerialize(relNode, writer);
-//                log.info(writer.toString());
+            StringWriter writer = new StringWriter();
+            context.executeAndSerialize(relNode, writer);
+            log.info(writer.toString());
         }
     }
 
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
-            System.out.println("Usage: java -jar App.jar <QueryFolder> " +
-                    "<OutputFolder>");
+            log.error("Usage: java -jar App.jar <QueryFolder> <OutputFolder>");
             return;
         }
 
@@ -90,12 +95,18 @@ public class App {
 
         var config = new Config(OPTIMIZATION_RULES, "duckdb.db", args[0],
                 args[1]);
+        var stats = new TableStatistics.Builder(config.getDataSource()).build();
+        for (var stat : stats.values()) {
+            log.info("Table[{}]: {} rows", stat.getTableName(),
+                    stat.getRowCount());
+        }
+
         for (var sqlEntry : config.getQueries().entrySet()) {
             var filename = sqlEntry.getKey();
             var query = sqlEntry.getValue();
 
             log.info("Visiting {}", filename);
-            processSql(query, config);
+            processSql(query, config, stats);
         }
     }
 }

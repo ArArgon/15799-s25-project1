@@ -1,5 +1,6 @@
 package edu.cmu.cs.db.calcite_app.app.adapter;
 
+import edu.cmu.cs.db.calcite_app.app.TableStatistics;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.adapter.jdbc.JdbcTable;
 import org.apache.calcite.linq4j.tree.Expression;
@@ -16,11 +17,14 @@ import java.util.Set;
 public class ExtendedJdbcSchema implements Schema {
     private final JdbcSchema jdbcSchema;
     private final Map<String, Table> tableMap = new HashMap<>();
+    private final Map<String, TableStatistics> statistics;
 
-    public ExtendedJdbcSchema(JdbcSchema jdbcSchema) {
+    public ExtendedJdbcSchema(JdbcSchema jdbcSchema, Map<String,
+            TableStatistics> statistics) {
         this.jdbcSchema = jdbcSchema;
+        this.statistics = statistics;
     }
-    
+
     @Override
     public @Nullable Table getTable(String name) {
         if (tableMap.containsKey(name)) {
@@ -32,7 +36,7 @@ public class ExtendedJdbcSchema implements Schema {
             return null;
         }
 
-        var table = new ExtendedJdbcTable(jdbcTable);
+        var table = new ExtendedJdbcTable(jdbcTable, statistics.get(name));
         tableMap.put(name, table);
         return table;
     }
@@ -66,7 +70,7 @@ public class ExtendedJdbcSchema implements Schema {
     public @Nullable Schema getSubSchema(String name) {
         var schema = jdbcSchema.getSubSchema(name);
         if (schema instanceof JdbcSchema subSchema) {
-            return new ExtendedJdbcSchema(subSchema);
+            return new ExtendedJdbcSchema(subSchema, statistics);
         }
 
         return schema;
@@ -92,6 +96,6 @@ public class ExtendedJdbcSchema implements Schema {
     public Schema snapshot(SchemaVersion version) {
         var snapshot = jdbcSchema.snapshot(version);
 
-        return new ExtendedJdbcSchema((JdbcSchema) snapshot);
+        return new ExtendedJdbcSchema((JdbcSchema) snapshot, statistics);
     }
 }

@@ -28,6 +28,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 public class OptimizationContext implements AutoCloseable {
@@ -40,13 +41,15 @@ public class OptimizationContext implements AutoCloseable {
     private final Planner planner;
 
 
-    public OptimizationContext(Config config) throws SQLException {
+    public OptimizationContext(Config config,
+                               Map<String, TableStatistics> statistics) throws SQLException {
         this.calciteConnection = initCalciteConnection();
         this.config = config;
 
         SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
-        var schema = new ExtendedJdbcSchema(config.getJdbcSchema(rootSchema));
+        var schema = new ExtendedJdbcSchema(config.getJdbcSchema(rootSchema),
+                statistics);
 
         rootSchema.add(DUCKDB_SCHEMA, schema);
         calciteConnection.setSchema(DUCKDB_SCHEMA);
@@ -99,7 +102,7 @@ public class OptimizationContext implements AutoCloseable {
         traits = traits.plus(EnumerableConvention.INSTANCE);
 
         Program program = Programs.of(RuleSets.ofList(rules));
-        
+
         rel = program.run(
                 optPlanner,
                 rel,
