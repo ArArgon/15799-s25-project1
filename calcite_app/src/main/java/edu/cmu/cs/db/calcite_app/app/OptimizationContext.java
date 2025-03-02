@@ -119,7 +119,10 @@ public class OptimizationContext implements AutoCloseable {
                 new RelToSqlConverter(PostgresqlSqlDialect.DEFAULT);
 
         var result = converter.visitRoot(rel);
-        return result.asQueryOrValues().toString();
+        return result
+                .asQueryOrValues()
+                .toSqlString(PostgresqlSqlDialect.DEFAULT)
+                .getSql();
     }
 
     public void executeAndSerialize(RelNode rel, Writer writer) throws SQLException,
