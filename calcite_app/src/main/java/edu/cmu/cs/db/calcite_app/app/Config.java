@@ -10,14 +10,13 @@ import javax.sql.DataSource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public class Config {
     private static final String DUCKDB_SCHEMA = "duckdb";
     private static final Logger log = LoggerFactory.getLogger(Config.class);
+
+    private final Set<String> filteredCases;
     private final List<RelOptRule> rules;
     private final String queryFolder;
     private final String outputFolder;
@@ -27,10 +26,11 @@ public class Config {
                   String databaseFile,
                   String queryFolder,
                   String outputFolder) {
-        this.rules = rules;
+        this.rules = new ArrayList<>(rules);
         this.queryFolder = queryFolder;
         this.outputFolder = outputFolder;
         this.databaseFile = databaseFile;
+        filteredCases = new HashSet<>();
     }
 
     public DataSource getDataSource() {
@@ -38,6 +38,18 @@ public class Config {
         return JdbcSchema.dataSource(
                 url, "org.duckdb.DuckDBDriver", null, null
         );
+    }
+
+    public void addFilteredCase(String caseName) {
+        filteredCases.add(caseName);
+    }
+
+    public void addRules(RelOptRule... rules) {
+        this.rules.addAll(Arrays.asList(rules));
+    }
+
+    public void addRules(Collection<RelOptRule> rules) {
+        this.rules.addAll(rules);
     }
 
     public List<RelOptRule> getRules() {
@@ -53,11 +65,20 @@ public class Config {
     }
 
     public Map<String, String> getQueries() throws IOException {
+        if (queryFolder.toLowerCase().endsWith(".sql")) {
+            File file = new File(queryFolder);
+            return Map.of(queryFolder, Files.readString(file.toPath()));
+        }
+
         File directory = new File(queryFolder);
         Map<String, String> queries = new HashMap<>();
 
         for (File file : Objects.requireNonNull(directory.listFiles())) {
             var filename = file.getName();
+            if (filteredCases.contains(filename)) {
+                log.info("Skipping {}", filename);
+                continue;
+            }
             if (file.toString().toLowerCase().endsWith(".sql")) {
                 queries.put(filename, Files.readString(file.toPath()));
             }

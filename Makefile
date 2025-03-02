@@ -15,3 +15,4 @@ submit:
 
 clean:
 	rm -f $(ZIP_FILE)
+	rm -rf output/*
