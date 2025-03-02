@@ -116,7 +116,7 @@ public class App {
             Files.write(optimizedSQLFile.toPath(),
                     context.convertBackToSql(relNode).getBytes());
 
-            if (config.isFilteredCase(caseName)) {
+            if (config.isFilteredCase(filename)) {
                 log.info("Filtered plan: \n{}", optimizedPlan);
                 return;
             }
