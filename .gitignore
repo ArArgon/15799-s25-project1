@@ -32,4 +32,5 @@ output/
 data/
 duckdb
 *.db
+*.wal
 *.tgz
