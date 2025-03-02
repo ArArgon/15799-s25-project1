@@ -120,7 +120,7 @@ public class App {
                 log.info("Filtered plan: \n{}", optimizedPlan);
                 return;
             }
-            
+
             log.info("Executing the optimized plan");
             FileWriter fileWriter = new FileWriter(executionResult);
             context.executeAndSerialize(relNode, fileWriter);
@@ -135,8 +135,7 @@ public class App {
 
         var databaseFile = new File("duckdb.db");
         var config = new Config(OPTIMIZATION_RULES, databaseFile.getPath(),
-                args[0],
-                args[1]);
+                args[0], args[1]);
 
         if (!databaseFile.exists()) {
             config.loadDataSet();

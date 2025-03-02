@@ -15,7 +15,6 @@ import java.sql.SQLException;
 import java.util.*;
 
 public class Config {
-    private static final String DUCKDB_SCHEMA = "duckdb";
     private static final Logger log = LoggerFactory.getLogger(Config.class);
 
     private final Set<String> filteredCases;
@@ -73,9 +72,7 @@ public class Config {
     public void analyze() throws SQLException {
         try (var connection = getDataSource().getConnection()) {
             try (var statement = connection.prepareStatement("analyze")) {
-                if (!statement.execute()) {
-                    log.warn("Failed to analyze the database");
-                }
+                statement.execute();
             }
         }
     }
@@ -130,9 +127,9 @@ public class Config {
         return databaseFile;
     }
 
-    public JdbcSchema getJdbcSchema(SchemaPlus rootSchema) {
+    public JdbcSchema getJdbcSchema(SchemaPlus rootSchema, String name) {
         var jdbcSchema = JdbcSchema.create(
-                rootSchema, DUCKDB_SCHEMA, getDataSource(), null, null
+                rootSchema, name, getDataSource(), null, null
         );
         log.info("connection schema: {}", jdbcSchema.getTableNames());
         return jdbcSchema;

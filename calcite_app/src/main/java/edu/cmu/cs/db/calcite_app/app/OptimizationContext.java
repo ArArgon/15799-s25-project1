@@ -48,15 +48,15 @@ public class OptimizationContext implements AutoCloseable {
 
         SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
-        var schema = new ExtendedJdbcSchema(config.getJdbcSchema(rootSchema),
+        var schema = new ExtendedJdbcSchema(config.getJdbcSchema(rootSchema,
+                DUCKDB_SCHEMA),
                 statistics);
 
-        rootSchema.add(DUCKDB_SCHEMA, schema);
-        calciteConnection.setSchema(DUCKDB_SCHEMA);
+        rootSchema = rootSchema.add(DUCKDB_SCHEMA, schema);
 
         var frameworkConfig = Frameworks
                 .newConfigBuilder()
-                .defaultSchema(rootSchema.getSubSchema(DUCKDB_SCHEMA))
+                .defaultSchema(rootSchema)
                 .parserConfig(SqlParser.config().withCaseSensitive(false))
                 .sqlToRelConverterConfig(SqlToRelConverter.config().withExpand(true))
                 .build();
@@ -118,11 +118,13 @@ public class OptimizationContext implements AutoCloseable {
         RelToSqlConverter converter =
                 new RelToSqlConverter(PostgresqlSqlDialect.DEFAULT);
 
-        var result = converter.visitRoot(rel);
-        return result
+        var result = converter
+                .visitRoot(rel)
                 .asQueryOrValues()
                 .toSqlString(PostgresqlSqlDialect.DEFAULT)
                 .getSql();
+
+        return result.replaceAll(String.format("\"%s\"\\.", DUCKDB_SCHEMA), "");
     }
 
     public void executeAndSerialize(RelNode rel, Writer writer) throws SQLException,
