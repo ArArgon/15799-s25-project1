@@ -58,9 +58,8 @@ public class Utils {
                 SqlExplainLevel.ALL_ATTRIBUTES);
     }
 
-    public static void serializeResultSet(ResultSet resultSet,
-                                          Writer writer) throws SQLException,
-            IOException {
+    public static void serializeResultSet(ResultSet resultSet, Writer writer)
+            throws SQLException, IOException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columnCount = metaData.getColumnCount();
         for (int i = 1; i <= columnCount; i++) {

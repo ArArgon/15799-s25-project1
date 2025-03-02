@@ -128,8 +128,16 @@ public class App {
             return;
         }
 
-        var config = new Config(OPTIMIZATION_RULES, "duckdb.db", args[0],
+        var databaseFile = new File("duckdb.db");
+        var config = new Config(OPTIMIZATION_RULES, databaseFile.getPath(),
+                args[0],
                 args[1]);
+
+        if (!databaseFile.exists()) {
+            config.loadDataSet();
+        }
+
+        config.analyze();
         var stats = new TableStatistics.Builder(config.getDataSource()).build();
 
         config.addRules(

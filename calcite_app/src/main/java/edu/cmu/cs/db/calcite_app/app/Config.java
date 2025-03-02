@@ -10,6 +10,8 @@ import javax.sql.DataSource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.*;
 
 public class Config {
@@ -38,6 +40,44 @@ public class Config {
         return JdbcSchema.dataSource(
                 url, "org.duckdb.DuckDBDriver", null, null
         );
+    }
+
+    public void loadDataSet() throws IOException, SQLException {
+        var dataPath = Path.of(queryFolder, "..", "data");
+
+        try (var connection = getDataSource().getConnection()) {
+            // 1. load schema
+            var schemaPath = Path.of(dataPath.toString(), "schema.sql");
+            try (var statement =
+                         connection.prepareStatement(Files.readString(schemaPath))) {
+                statement.execute();
+            }
+
+
+            // 2. populate data
+            for (var file : dataPath.toFile().listFiles()) {
+                var fileName = file.getName();
+                if (fileName.endsWith(".parquet")) {
+                    var tableName = fileName.substring(0,
+                            fileName.length() - ".parquet".length());
+                    var copy = String.format("COPY %s FROM '%s' (FORMAT " +
+                            "'parquet')", tableName, file.toPath());
+                    try (var statement = connection.prepareStatement(copy)) {
+                        statement.execute();
+                    }
+                }
+            }
+        }
+    }
+
+    public void analyze() throws SQLException {
+        try (var connection = getDataSource().getConnection()) {
+            try (var statement = connection.prepareStatement("analyze")) {
+                if (!statement.execute()) {
+                    log.warn("Failed to analyze the database");
+                }
+            }
+        }
     }
 
     public void addFilteredCase(String caseName) {
