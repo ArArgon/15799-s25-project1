@@ -104,6 +104,10 @@ public class Config {
         return outputFolder;
     }
 
+    public boolean isFilteredCase(String caseName) {
+        return filteredCases.contains(caseName);
+    }
+
     public Map<String, String> getQueries() throws IOException {
         if (queryFolder.toLowerCase().endsWith(".sql")) {
             File file = new File(queryFolder);
@@ -115,10 +119,6 @@ public class Config {
 
         for (File file : Objects.requireNonNull(directory.listFiles())) {
             var filename = file.getName();
-            if (filteredCases.contains(filename)) {
-                log.info("Skipping {}", filename);
-                continue;
-            }
             if (file.toString().toLowerCase().endsWith(".sql")) {
                 queries.put(filename, Files.readString(file.toPath()));
             }
