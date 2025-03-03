@@ -22,12 +22,19 @@ public class Config {
     private final String queryFolder;
     private final String outputFolder;
     private final String databaseFile;
+    private final Optional<String> singleTestCase;
 
     public Config(List<RelOptRule> rules,
                   String databaseFile,
                   String queryFolder,
                   String outputFolder) {
         this.rules = new ArrayList<>(rules);
+        if (Files.isRegularFile(Path.of(queryFolder))) {
+            this.singleTestCase = Optional.of(queryFolder);
+            queryFolder = Path.of(queryFolder).getParent().toString();
+        } else {
+            this.singleTestCase = Optional.empty();
+        }
         this.queryFolder = queryFolder;
         this.outputFolder = outputFolder;
         this.databaseFile = databaseFile;
@@ -106,9 +113,10 @@ public class Config {
     }
 
     public Map<String, String> getQueries() throws IOException {
-        if (queryFolder.toLowerCase().endsWith(".sql")) {
-            File file = new File(queryFolder);
-            return Map.of(queryFolder, Files.readString(file.toPath()));
+        if (singleTestCase.isPresent()) {
+            var testCase = singleTestCase.get();
+            File file = new File(testCase);
+            return Map.of(file.getName(), Files.readString(file.toPath()));
         }
 
         File directory = new File(queryFolder);
